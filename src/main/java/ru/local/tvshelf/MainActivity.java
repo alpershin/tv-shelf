@@ -380,7 +380,7 @@ public final class MainActivity extends Activity {
         label.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         content.addView(label, new LinearLayout.LayoutParams(MATCH, WRAP));
         tile.addView(content, new FrameLayout.LayoutParams(MATCH, MATCH));
-        tile.setOnClickListener(view -> addFavorites(true));
+        tile.setOnClickListener(view -> editFavoriteSelection(true));
         appendShelfTile(tile, size);
         return tile;
     }
@@ -658,7 +658,7 @@ public final class MainActivity extends Activity {
         panel.root.addView(add, new LinearLayout.LayoutParams(MATCH, dp(48)));
         add.setOnClickListener(view -> {
             panel.dialog.dismiss();
-            addFavorites(false);
+            editFavoriteSelection(false);
         });
 
         List<TvApps.Entry> entries = new ArrayList<>();
@@ -684,59 +684,65 @@ public final class MainActivity extends Activity {
         });
     }
 
-    private void addFavorites(boolean focusAddedApp) {
+    private void editFavoriteSelection(boolean focusAddedApp) {
         if (apps.entries.isEmpty()) {
             toast("Нет доступных ТВ-приложений.");
             return;
         }
         Panel panel = createPanel("Добавить приложения", 764);
-        List<String> selected = new ArrayList<>();
-        TextView save = actionText("Добавить");
+        List<String> original = store.favorites();
+        Map<String, Boolean> changes = new LinkedHashMap<>();
+        TextView save = actionText("Сохранить");
         panel.root.addView(save, new LinearLayout.LayoutParams(MATCH, dp(48)));
-        updateAddButton(save, 0);
+        setFavoriteSaveEnabled(save, false);
         save.setOnClickListener(view -> {
             List<String> current = store.favorites();
             String firstAdded = null;
-            for (String id : selected) {
+            for (Map.Entry<String, Boolean> change : changes.entrySet()) {
+                String id = change.getKey();
+                if (!change.getValue()) {
+                    current.removeIf(id::equals);
+                    continue;
+                }
                 if (current.contains(id) || !apps.byId.containsKey(id)) continue;
                 current.add(id);
                 if (firstAdded == null) firstAdded = id;
             }
             panel.dialog.dismiss();
-            if (firstAdded == null) return;
             store.saveFavorites(current);
-            if (focusAddedApp) focusedPackage = firstAdded;
+            if (focusAddedApp && firstAdded != null) focusedPackage = firstAdded;
             buildTiles();
         });
         showAppGrid(panel, apps.entries, 48, true, (entry, item) -> {
-            boolean added = tiles.containsKey(entry.id);
-            String caption = added ? entry.name + " · Уже на полке" : entry.name;
-            item.setContentDescription(caption);
+            boolean pinned = original.contains(entry.id);
+            String unchanged = pinned ? entry.name + " · Уже на полке" : entry.name;
+            item.setSelected(pinned);
+            item.setContentDescription(unchanged);
             item.setOnFocusChangeListener((view, focused) -> {
-                if (focused) panel.caption.setText(item.isSelected() ? entry.name + " · Выбрано" : caption);
+                if (focused) panel.caption.setText(item.getContentDescription());
             });
 
-            TextView check = addAppCheck(item, added ? "✓" : "");
+            TextView check = addAppCheck(item, pinned ? "✓" : "");
             item.setAccessibilityDelegate(new View.AccessibilityDelegate() {
                 @Override
                 public void onInitializeAccessibilityNodeInfo(View host, AccessibilityNodeInfo info) {
                     super.onInitializeAccessibilityNodeInfo(host, info);
                     info.setClassName("android.widget.CheckBox");
                     info.setCheckable(true);
-                    info.setChecked(added || host.isSelected());
+                    info.setChecked(host.isSelected());
                 }
             });
-            if (added) {
-                item.setClickable(false);
-                return;
-            }
             item.setOnClickListener(view -> {
-                boolean checked = !selected.remove(entry.id);
-                if (checked) selected.add(entry.id);
+                boolean checked = !item.isSelected();
+                if (checked == pinned) changes.remove(entry.id);
+                else changes.put(entry.id, checked);
                 item.setSelected(checked);
                 check.setText(checked ? "✓" : "");
-                if (item.hasFocus()) panel.caption.setText(checked ? entry.name + " · Выбрано" : caption);
-                updateAddButton(save, selected.size());
+                String caption = checked == pinned ? unchanged : entry.name
+                        + (checked ? " · Будет добавлено" : " · Будет убрано с полки");
+                item.setContentDescription(caption);
+                if (item.hasFocus()) panel.caption.setText(caption);
+                setFavoriteSaveEnabled(save, !changes.isEmpty());
             });
         });
     }
@@ -760,10 +766,9 @@ public final class MainActivity extends Activity {
         item.addView(badge, params);
     }
 
-    private void updateAddButton(TextView button, int count) {
-        button.setText(count == 0 ? "Добавить" : "Добавить (" + count + ")");
-        button.setEnabled(count > 0);
-        button.setAlpha(count > 0 ? 1f : 0.56f);
+    private void setFavoriteSaveEnabled(TextView button, boolean enabled) {
+        button.setEnabled(enabled);
+        button.setAlpha(enabled ? 1f : 0.56f);
     }
 
     private void editFavorite(String id) {
