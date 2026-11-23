@@ -15,6 +15,7 @@
 
 <p align="center">
   <a href="https://github.com/alpershin/tv-shelf/releases/latest">Download APK</a> ·
+  <a href="#on-tv">Screenshots and demos</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="BUILD.md">Build from source</a>
 </p>
@@ -28,12 +29,32 @@
 - **Apps by icon.** Browse installed TV apps or reopen apps recently launched from the shelf.
 - **Made for the remote.** Use the directional pad and center button. The interface follows the system’s light or dark theme.
 
+## On TV
+
+<p align="center">
+  <img src="docs/media/home.png" width="900" alt="TV Shelf home screen with favorite apps and the quick actions dock">
+</p>
+
+| All apps | Add apps | Favorites |
+| --- | --- | --- |
+| ![Installed apps displayed as icons](docs/media/apps.png) | ![App icons with circular checkmarks indicating which apps are selected or already pinned](docs/media/add-apps.png) | ![Favorite apps with a star in the top corner of each icon](docs/media/favorites.png) |
+
+<details>
+<summary>Watch the remote demos</summary>
+
+| Browse the shelf | Add apps | Reorder a tile |
+| --- | --- | --- |
+| ![Move between favorites and open the apps grid](docs/media/navigation.gif) | ![Open the plus tile and select an app in the icon grid](docs/media/add.gif) | ![Use the remote to move a favorite tile to a new position](docs/media/reorder.gif) |
+
+</details>
+
 ## Quick start
 
 1. Download **tv-shelf.apk** from [Releases](https://github.com/alpershin/tv-shelf/releases/latest).
 2. Sideload it. If the TV is already connected through ADB, run `adb install -r tv-shelf.apk`.
-3. Open **Полка** from the TV’s app list. Use **Настроить полку** to pick favorites and shortcuts.
-4. To reorder a tile, hold the center button, then move it left or right. Press the center button again to save or Back to cancel.
+3. Open **Полка** from the TV’s app list. Go to **+ Добавить приложение** at the right end of the shelf, select icons, and press **Добавить**. The caption identifies apps that are already pinned.
+4. To reorder a tile, hold the center button, then move it left or right. Press Down and select **Готово** to save, or press Back to cancel.
+5. Open **Настроить полку** to manage favorites and quick actions. Select a starred icon in **Избранное** to move or remove that app.
 
 ### Open TV Shelf with Home
 

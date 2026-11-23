@@ -23,8 +23,7 @@ import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityManager;
-import android.content.res.ColorStateList;
-import android.widget.CheckBox;
+import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
@@ -39,10 +38,15 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
 import java.util.function.IntConsumer;
 
 public final class MainActivity extends Activity {
     private static final String APP_PREFIX = "app:";
+    private static final String ADD_APP_TILE = "add-app";
+    private static final String ADD_APP_LABEL = "Добавить приложение";
+    private static final int APP_CHECK_BACKGROUND = 0xFF192530;
+    private static final int APP_CHECK_FOREGROUND = 0xFFF0F3F6;
     private static final int MATCH = ViewGroup.LayoutParams.MATCH_PARENT;
     private static final int WRAP = ViewGroup.LayoutParams.WRAP_CONTENT;
 
@@ -55,6 +59,7 @@ public final class MainActivity extends Activity {
     private ShelfLighting lighting;
     private ShelfViewport shelfScroll;
     private LinearLayout shelf;
+    private ShelfTile addAppTile;
     private LinearLayout dock;
     private LinearLayout moveDock;
     private View moveDone;
@@ -295,13 +300,7 @@ public final class MainActivity extends Activity {
             TvApps.Entry app = apps.byId.get(id);
             if (app == null || tiles.containsKey(id)) continue;
             ShelfArtwork artwork = new ShelfArtwork(apps.icon(app), color(R.color.accent));
-            ShelfTile tile = new ShelfTile(this);
-            tile.setId(View.generateViewId());
-            tile.setFocusable(true);
-            tile.setClickable(true);
-            tile.setContentDescription(app.name);
-            tile.setDefaultFocusHighlightEnabled(false);
-            tile.setForeground(focusOutline(lighting.outline(artwork.accent)));
+            ShelfTile tile = createShelfTile(id, app.name, artwork.accent);
             tile.setActivated(id.equals(movingPackage));
 
             ImageView art = new ImageView(this);
@@ -312,21 +311,6 @@ public final class MainActivity extends Activity {
             art.setScaleType(ImageView.ScaleType.CENTER_CROP);
             tile.addView(art, new FrameLayout.LayoutParams(MATCH, MATCH));
 
-            tile.setOnFocusChangeListener((view, focused) -> {
-                if (focused) {
-                    focusedPackage = id;
-                    appName.setText(app.name);
-                    lighting.selectColor(artwork.accent);
-                    lighting.follow(tile);
-                    tile.post(() -> {
-                        if (tile.hasFocus()) {
-                            shelfScroll.revealTerminalTile(tile);
-                            lighting.follow(tile);
-                        }
-                    });
-                }
-                lighting.showFocus(focused);
-            });
             tile.setOnClickListener(view -> {
                 if (moveOrder == null) launchPackage(id);
                 else if (movingPackage == null) pickTile(id);
@@ -336,31 +320,73 @@ public final class MainActivity extends Activity {
                 if (moveOrder == null && tiles.size() > 1) beginMove(id, confirmKeyDown);
                 return true;
             });
-            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(dp(size), dp(size));
-            params.rightMargin = dp(20);
-            shelf.addView(tile, params);
+            appendShelfTile(tile, size);
             tiles.put(id, tile);
         }
 
-        if (tiles.isEmpty()) {
-            appName.setText("Избранное");
-            lighting.showFocus(false);
-            TextView add = text("Добавить приложения", 19, R.color.on_surface, true);
-            add.setGravity(Gravity.CENTER);
-            add.setId(View.generateViewId());
-            add.setFocusable(true);
-            add.setBackground(focusBackground(color(R.color.tile_a), 14));
-            add.setOnClickListener(view -> editFavorites());
-            shelf.addView(add, new LinearLayout.LayoutParams(dp(220), dp(96)));
-        } else {
-            if (!tiles.containsKey(focusedPackage)) focusedPackage = tiles.keySet().iterator().next();
-            appName.setText(apps.byId.get(focusedPackage).name);
+        addAppTile = moveOrder == null ? appendAddAppTile(size) : null;
+        if (!tiles.containsKey(focusedPackage) && !ADD_APP_TILE.equals(focusedPackage)) {
+            focusedPackage = tiles.isEmpty() ? ADD_APP_TILE : tiles.keySet().iterator().next();
         }
+        appName.setText(ADD_APP_TILE.equals(focusedPackage)
+                ? ADD_APP_LABEL : apps.byId.get(focusedPackage).name);
         selectShelfTile();
     }
 
+    private ShelfTile createShelfTile(String id, String label, int accent) {
+        ShelfTile tile = new ShelfTile(this);
+        tile.setId(View.generateViewId());
+        tile.setFocusable(true);
+        tile.setClickable(true);
+        tile.setContentDescription(label);
+        tile.setDefaultFocusHighlightEnabled(false);
+        tile.setForeground(focusOutline(lighting.outline(accent)));
+        tile.setOnFocusChangeListener((view, focused) -> {
+            if (focused) {
+                focusedPackage = id;
+                appName.setText(label);
+                lighting.selectColor(accent);
+                lighting.follow(tile);
+                tile.post(() -> {
+                    if (tile.hasFocus()) {
+                        shelfScroll.revealTerminalTile(tile);
+                        lighting.follow(tile);
+                    }
+                });
+            }
+            lighting.showFocus(focused);
+        });
+        return tile;
+    }
+
+    private void appendShelfTile(ShelfTile tile, int size) {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(dp(size), dp(size));
+        params.rightMargin = dp(20);
+        shelf.addView(tile, params);
+    }
+
+    private ShelfTile appendAddAppTile(int size) {
+        ShelfTile tile = createShelfTile(ADD_APP_TILE, ADD_APP_LABEL, color(R.color.accent));
+        tile.setContentDescription("Добавить приложение на главный экран");
+        tile.setBackground(shape(color(R.color.surface_group), 14, color(R.color.outline), 1));
+
+        LinearLayout content = vertical();
+        content.setGravity(Gravity.CENTER);
+        content.setPadding(dp(8), 0, dp(8), 0);
+        content.addView(new Glyph(this, "add", color(R.color.accent)),
+                new LinearLayout.LayoutParams(dp(52), dp(52)));
+        TextView label = text(ADD_APP_LABEL, 14, R.color.on_surface, true);
+        label.setGravity(Gravity.CENTER);
+        label.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        content.addView(label, new LinearLayout.LayoutParams(MATCH, WRAP));
+        tile.addView(content, new FrameLayout.LayoutParams(MATCH, MATCH));
+        tile.setOnClickListener(view -> addFavorites(true));
+        appendShelfTile(tile, size);
+        return tile;
+    }
+
     private void selectShelfTile() {
-        View tile = tiles.get(focusedPackage);
+        View tile = ADD_APP_TILE.equals(focusedPackage) ? addAppTile : tiles.get(focusedPackage);
         if (tile == null) tile = shelf.getChildAt(0);
         if (tile != null) tile.requestFocus();
     }
@@ -503,12 +529,24 @@ public final class MainActivity extends Activity {
             return;
         }
 
-        TextView selection = panel.caption;
-        selection.setVisibility(View.VISIBLE);
-        selection.setText(entries.get(0).name);
+        showAppGrid(panel, entries, 0, false, (entry, item) -> {
+            item.setOnFocusChangeListener((view, focused) -> {
+                if (focused) panel.caption.setText(entry.name);
+            });
+            item.setOnClickListener(view -> {
+                panel.dialog.dismiss();
+                launchPackage(entry.id);
+            });
+        });
+    }
+
+    private void showAppGrid(Panel panel, List<TvApps.Entry> entries, int footerHeight, boolean markTiles,
+                             BiConsumer<TvApps.Entry, FrameLayout> bindTile) {
+        panel.caption.setVisibility(View.VISIBLE);
         int columns = Math.min(6, Math.max(3, (panel.width - 40) / 96));
         int gap = 14;
-        int size = Math.min(104, (panel.width - 48 - gap * (columns - 1)) / columns);
+        int maxSize = footerHeight == 0 ? 104 : 92;
+        int size = Math.min(maxSize, (panel.width - 48 - gap * (columns - 1)) / columns);
         LinearLayout row = null;
         View first = null;
         for (int i = 0; i < entries.size(); i++) {
@@ -533,20 +571,21 @@ public final class MainActivity extends Activity {
             image.setImageBitmap(artwork.image);
             image.setScaleType(ImageView.ScaleType.CENTER_CROP);
             item.addView(image, new FrameLayout.LayoutParams(MATCH, MATCH));
-            item.setOnFocusChangeListener((view, focused) -> {
-                if (focused) selection.setText(entry.name);
-            });
-            item.setOnClickListener(view -> {
-                panel.dialog.dismiss();
-                launchPackage(entry.id);
-            });
+            if (markTiles) {
+                item.addView(new ShelfBadgeCorner(this, artwork.image),
+                        new FrameLayout.LayoutParams(MATCH, MATCH));
+            }
+            bindTile.accept(entry, item);
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(dp(size), dp(size));
             if (i % columns != columns - 1) params.rightMargin = dp(gap);
             row.addView(item, params);
-            if (first == null) first = item;
+            if (first == null) {
+                first = item;
+                panel.caption.setText(item.getContentDescription());
+            }
         }
         int rows = (entries.size() + columns - 1) / columns;
-        showPanel(panel, first, Math.min(rows, 3) * (size + gap) + 120);
+        showPanel(panel, first, Math.min(rows, 3) * (size + gap) + 120 + footerHeight);
     }
 
     private void editShelf() {
@@ -614,51 +653,110 @@ public final class MainActivity extends Activity {
     }
 
     private void editFavorites() {
-        String[] names = new String[tiles.size() + 1];
-        names[0] = "Добавить приложения";
-        List<String> ids = new ArrayList<>(tiles.keySet());
-        for (int i = 0; i < ids.size(); i++) names[i + 1] = apps.byId.get(ids.get(i)).name;
-        showOptions("Избранное", names, null, index -> {
-            if (index == 0) addFavorites();
-            else editFavorite(ids.get(index - 1));
+        Panel panel = createPanel("Избранное", 764);
+        TextView add = actionText("Добавить приложения");
+        panel.root.addView(add, new LinearLayout.LayoutParams(MATCH, dp(48)));
+        add.setOnClickListener(view -> {
+            panel.dialog.dismiss();
+            addFavorites(false);
+        });
+
+        List<TvApps.Entry> entries = new ArrayList<>();
+        for (String id : tiles.keySet()) entries.add(apps.byId.get(id));
+        if (entries.isEmpty()) {
+            panel.content.addView(text("Здесь появятся приложения с главного экрана.",
+                    17, R.color.on_surface_variant, false));
+            showPanel(panel, add, 218);
+            return;
+        }
+        showAppGrid(panel, entries, 48, true, (entry, item) -> {
+            addAppBadge(item, "★");
+            item.setOnFocusChangeListener((view, focused) -> {
+                if (focused) panel.caption.setText(entry.name);
+            });
+            item.setOnClickListener(view -> {
+                panel.dialog.dismiss();
+                editFavorite(entry.id);
+            });
         });
     }
 
-    private void addFavorites() {
-        List<TvApps.Entry> entries = new ArrayList<>();
-        for (TvApps.Entry entry : apps.entries) {
-            if (!tiles.containsKey(entry.id)) entries.add(entry);
-        }
-        if (entries.isEmpty()) {
-            toast("Все ТВ-приложения уже на полке.");
+    private void addFavorites(boolean focusAddedApp) {
+        if (apps.entries.isEmpty()) {
+            toast("Нет доступных ТВ-приложений.");
             return;
         }
-        Panel panel = createPanel("Добавить приложения", 480);
-        List<CheckBox> choices = new ArrayList<>();
-        for (TvApps.Entry entry : entries) {
-            CheckBox choice = new CheckBox(this);
-            choice.setText(entry.name);
-            choice.setTextSize(17);
-            choice.setTextColor(color(R.color.on_surface));
-            choice.setButtonTintList(ColorStateList.valueOf(color(R.color.accent)));
-            choice.setPadding(dp(12), 0, dp(12), 0);
-            choice.setBackground(focusBackground(color(R.color.surface_group), 9));
-            choices.add(choice);
-            appendOption(panel, choice);
-        }
+        Panel panel = createPanel("Добавить приложения", 764);
+        List<String> selected = new ArrayList<>();
         TextView save = actionText("Добавить");
         panel.root.addView(save, new LinearLayout.LayoutParams(MATCH, dp(48)));
+        updateAddButton(save, 0);
         save.setOnClickListener(view -> {
             List<String> current = store.favorites();
-            for (int i = 0; i < choices.size(); i++) {
-                String id = entries.get(i).id;
-                if (choices.get(i).isChecked() && !current.contains(id)) current.add(id);
+            String firstAdded = null;
+            for (String id : selected) {
+                if (current.contains(id) || !apps.byId.containsKey(id)) continue;
+                current.add(id);
+                if (firstAdded == null) firstAdded = id;
             }
-            store.saveFavorites(current);
             panel.dialog.dismiss();
+            if (firstAdded == null) return;
+            store.saveFavorites(current);
+            if (focusAddedApp) focusedPackage = firstAdded;
             buildTiles();
         });
-        showPanel(panel, choices.get(0), 345);
+        showAppGrid(panel, apps.entries, 48, true, (entry, item) -> {
+            boolean added = tiles.containsKey(entry.id);
+            String caption = added ? entry.name + " · Уже на полке" : entry.name;
+            item.setContentDescription(caption);
+            item.setOnFocusChangeListener((view, focused) -> {
+                if (focused) panel.caption.setText(item.isSelected() ? entry.name + " · Выбрано" : caption);
+            });
+
+            TextView check = addAppBadge(item, added ? "✓" : "");
+            item.setAccessibilityDelegate(new View.AccessibilityDelegate() {
+                @Override
+                public void onInitializeAccessibilityNodeInfo(View host, AccessibilityNodeInfo info) {
+                    super.onInitializeAccessibilityNodeInfo(host, info);
+                    info.setClassName("android.widget.CheckBox");
+                    info.setCheckable(true);
+                    info.setChecked(added || host.isSelected());
+                }
+            });
+            if (added) {
+                item.setClickable(false);
+                return;
+            }
+            item.setOnClickListener(view -> {
+                boolean checked = !selected.remove(entry.id);
+                if (checked) selected.add(entry.id);
+                item.setSelected(checked);
+                check.setText(checked ? "✓" : "");
+                if (item.hasFocus()) panel.caption.setText(checked ? entry.name + " · Выбрано" : caption);
+                updateAddButton(save, selected.size());
+            });
+        });
+    }
+
+    private TextView addAppBadge(FrameLayout item, String mark) {
+        TextView badge = text(mark, 17, R.color.on_surface, true);
+        badge.setTextColor(APP_CHECK_FOREGROUND);
+        badge.setGravity(Gravity.CENTER);
+        badge.setIncludeFontPadding(false);
+        badge.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        badge.setBackground(shape(APP_CHECK_BACKGROUND, 13, APP_CHECK_FOREGROUND, 1));
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
+                dp(26), dp(26), Gravity.TOP | Gravity.END);
+        params.topMargin = dp(7);
+        params.setMarginEnd(dp(7));
+        item.addView(badge, params);
+        return badge;
+    }
+
+    private void updateAddButton(TextView button, int count) {
+        button.setText(count == 0 ? "Добавить" : "Добавить (" + count + ")");
+        button.setEnabled(count > 0);
+        button.setAlpha(count > 0 ? 1f : 0.56f);
     }
 
     private void editFavorite(String id) {
@@ -682,6 +780,10 @@ public final class MainActivity extends Activity {
 
     private void beginMove(String id, boolean heldConfirm) {
         moveOrder = store.favorites();
+        if (addAppTile != null) {
+            shelf.removeView(addAppTile);
+            addAppTile = null;
+        }
         ignoreHeldConfirmRelease = heldConfirm;
         dock.setVisibility(View.GONE);
         moveDock.setVisibility(View.VISIBLE);
