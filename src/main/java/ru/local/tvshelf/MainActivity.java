@@ -670,7 +670,10 @@ public final class MainActivity extends Activity {
             return;
         }
         showAppGrid(panel, entries, 48, true, (entry, item) -> {
-            addAppBadge(item, "★");
+            ImageView star = new ImageView(this);
+            star.setImageResource(R.drawable.ic_favorite_star);
+            star.setScaleType(ImageView.ScaleType.CENTER);
+            addAppBadge(item, star);
             item.setOnFocusChangeListener((view, focused) -> {
                 if (focused) panel.caption.setText(entry.name);
             });
@@ -713,7 +716,7 @@ public final class MainActivity extends Activity {
                 if (focused) panel.caption.setText(item.isSelected() ? entry.name + " · Выбрано" : caption);
             });
 
-            TextView check = addAppBadge(item, added ? "✓" : "");
+            TextView check = addAppCheck(item, added ? "✓" : "");
             item.setAccessibilityDelegate(new View.AccessibilityDelegate() {
                 @Override
                 public void onInitializeAccessibilityNodeInfo(View host, AccessibilityNodeInfo info) {
@@ -738,11 +741,16 @@ public final class MainActivity extends Activity {
         });
     }
 
-    private TextView addAppBadge(FrameLayout item, String mark) {
+    private TextView addAppCheck(FrameLayout item, String mark) {
         TextView badge = text(mark, 17, R.color.on_surface, true);
         badge.setTextColor(APP_CHECK_FOREGROUND);
         badge.setGravity(Gravity.CENTER);
         badge.setIncludeFontPadding(false);
+        addAppBadge(item, badge);
+        return badge;
+    }
+
+    private void addAppBadge(FrameLayout item, View badge) {
         badge.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         badge.setBackground(shape(APP_CHECK_BACKGROUND, 13, APP_CHECK_FOREGROUND, 1));
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
@@ -750,7 +758,6 @@ public final class MainActivity extends Activity {
         params.topMargin = dp(7);
         params.setMarginEnd(dp(7));
         item.addView(badge, params);
-        return badge;
     }
 
     private void updateAddButton(TextView button, int count) {
