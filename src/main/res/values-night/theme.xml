@@ -1,0 +1,19 @@
+<resources>
+    <color name="surface">#111722</color>
+    <color name="surface_group">#222B39</color>
+    <color name="surface_panel">#182130</color>
+    <color name="surface_key">#2D3A4C</color>
+    <color name="tile_a">#30443A</color>
+    <color name="on_surface">#F4F2F0</color>
+    <color name="on_surface_variant">#C1CAD9</color>
+    <color name="accent">#A7E0C6</color>
+    <color name="accent_container">#364A63</color>
+    <color name="outline">#61718A</color>
+    <color name="warning">#F3CC87</color>
+    <style name="ShelfTheme" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowBackground">@color/surface</item>
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="android:forceDarkAllowed">false</item>
+    </style>
+</resources>

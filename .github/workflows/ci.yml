@@ -1,0 +1,29 @@
+name: Android
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Build and verify APK
+        run: bash build.sh
+      - name: Verify Android TV and Home entry points
+        run: |
+          aapt2="$ANDROID_HOME/build-tools/35.0.0/aapt2"
+          "$aapt2" dump badging build/tv-shelf.apk > build/badging.txt
+          "$aapt2" dump xmltree build/tv-shelf.apk --file AndroidManifest.xml > build/manifest.txt
+          grep -Fq "leanback-launchable-activity: name='ru.local.tvshelf.MainActivity'" build/badging.txt
+          grep -Fq 'android.intent.category.HOME' build/manifest.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: tv-shelf-preview
+          path: build/tv-shelf.apk
+          if-no-files-found: error

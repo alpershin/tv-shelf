@@ -1,0 +1,4 @@
+<resources>
+    <string name="home_redirect_label">Полка по кнопке Home</string>
+    <string name="home_redirect_description">Открывает «Полку», когда появляется домашний экран Google TV. Служба получает событие о появлении этого экрана без доступа к содержимому окон.</string>
+</resources>
